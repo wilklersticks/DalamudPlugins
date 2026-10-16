@@ -22,15 +22,26 @@ jobs:
           # Add new plugin repos to this list.
           $repos = @('JumpLock', 'ReturnToSender')
 
-          $all = @()
+          $all = [System.Collections.Generic.List[object]]::new()
           foreach ($r in $repos) {
             $url = "https://raw.githubusercontent.com/$owner/$r/main/pluginmaster.json"
             # If any list can't be read, stop without changing anything,
             # so a plugin never vanishes from the repo because of a hiccup.
-            $all += @(Invoke-RestMethod -Uri $url -Headers @{ 'Cache-Control' = 'no-cache' })
-            Write-Host "Added plugins from $r"
+            $list = Invoke-RestMethod -Uri $url -Headers @{ 'Cache-Control' = 'no-cache' }
+            # Unpack each repo's list so the result is one flat list of plugins.
+            foreach ($plugin in @($list | ForEach-Object { $_ })) {
+              $all.Add($plugin)
+              Write-Host "Added $($plugin.Name) $($plugin.AssemblyVersion) from $r"
+            }
           }
-          ConvertTo-Json -InputObject @($all) -Depth 10 | Set-Content pluginmaster.json -Encoding utf8
+
+          if ($all.Count -eq 0) { throw "No plugins found." }
+          ConvertTo-Json -InputObject $all.ToArray() -Depth 10 | Set-Content pluginmaster.json -Encoding utf8
+
+          # Sanity check: must be a flat list of plugin entries.
+          $check = Get-Content pluginmaster.json -Raw | ConvertFrom-Json -NoEnumerate
+          if ($check[0] -is [array] -or -not $check[0].InternalName) { throw "Merged file has the wrong shape." }
+          Write-Host "Combined list has $($check.Count) plugin(s)."
 
       - name: Save if changed
         run: |
