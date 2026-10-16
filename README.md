@@ -1,2 +1,2 @@
 # DalamudPlugins
-A 0repo
+A repo
